@@ -14,7 +14,7 @@ class CrmLead(models.Model):
         related="partner_id.website", string="Website", readonly=False)
     partner_category_ids = fields.Many2many(
         related="partner_id.category_id", string="Contact Tags")
-    partner_notes = fields.Text(
+    partner_notes = fields.Html(
         related="partner_id.comment", string="Notes")
 
     last_outreach_date = fields.Datetime(
