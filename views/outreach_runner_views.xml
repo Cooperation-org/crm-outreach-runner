@@ -7,10 +7,15 @@
         <field name="model">crm.lead</field>
         <field name="arch" type="xml">
             <tree string="Outreach Runner"
-                  default_order="priority desc, last_outreach_date asc, create_date desc"
+                  default_order="outreach_pinned desc, outreach_seq asc, outreach_score desc"
                   decoration-muted="last_outreach_date != False"
+                  decoration-bf="outreach_pinned == True"
                   sample="1">
+                <field name="outreach_seq" widget="handle"/>
+                <field name="outreach_pinned" column_invisible="1"/>
+                <field name="outreach_score_reason" column_invisible="1"/>
                 <field name="priority" widget="priority"/>
+                <field name="outreach_score" string="Rank" optional="show"/>
                 <field name="partner_id" string="Contact"/>
                 <field name="function" string="Role" optional="show"/>
                 <field name="campaign_id" optional="show"/>
@@ -33,7 +38,7 @@
         <field name="name">crm.lead.outreach.runner.kanban</field>
         <field name="model">crm.lead</field>
         <field name="arch" type="xml">
-            <kanban class="o_kanban_mobile" default_order="priority desc" sample="1">
+            <kanban class="o_kanban_mobile" default_order="outreach_pinned desc, outreach_seq asc, outreach_score desc" sample="1">
                 <field name="priority"/>
                 <field name="partner_id"/>
                 <field name="function"/>
