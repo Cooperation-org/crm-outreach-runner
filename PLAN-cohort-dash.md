@@ -100,6 +100,58 @@ is a browser-consumable read endpoint and the component.
   Odoo session cookie is host-scoped and SameSite=Lax → rides on
   credentialed same-site fetches from workers.vc.
 
+### Status (2026-07-19)
+
+Items 1-4 below are DONE (see README.md for the full endpoint +
+component contract). Implementation notes / deltas from the sketches:
+
+- The example `url` shape `/odoo/crm.lead/7` is Odoo 18 URL style and
+  does not exist on Odoo 17 — the endpoint emits the working 17 deep
+  link `{host}/web#id=<id>&model=crm.lead&view_type=form`, still built
+  from `request.httprequest.host_url`.
+- Endpoint scope matches the Outreach Runner action: opportunities only
+  (`type = 'opportunity'`); `count_to_reach` counts them regardless of
+  `limit`. `limit` clamps to 1..100, invalid → 5.
+- OPTIONS preflight is a second route on the same path with
+  `auth='none'` (browsers send preflights without credentials, so an
+  `auth='user'` OPTIONS route can never succeed); it touches no data.
+- Static path verified against `odoo/http.py` (`Application.statics` /
+  `_serve_static`): every installable module's `static/` dir is served
+  pre-auth at `/<module>/static/<path>`. Note `statics` is a
+  `lazy_property` per worker — a service restart (which the ansible
+  module-upgrade deploy does anyway) is needed before a *newly added*
+  static dir is served.
+- **ACL (item 3)**: reading `crm.lead` requires
+  `sales_team.group_sale_salesman` ("Sales / User: Own Documents Only",
+  ACL `crm.access_crm_lead`), which implies `base.group_user` — cohort
+  users provisioned via OIDC must be **internal** users with that group
+  (portal users have no crm.lead ACL). Its record rule shows own +
+  unassigned leads; for the whole team queue add
+  `sales_team.group_sale_salesman_all_leads` ("User: All Documents").
+- **Added (SSO-once scope, 2026-07-19): `GET /outreach/connect?next=<url>`**,
+  `auth='user'` — the dash's session-warming hop. Anonymous hits bounce
+  through `/web/login?redirect=/outreach/connect?next=…` (verified:
+  Odoo puts `httprequest.full_path` — path *including* query — into the
+  login `redirect` param, and stock auth_oauth's `get_state` carries
+  that `redirect` through the OAuth round-trip). Authenticated: 302 to
+  `next` only when scheme+host is exactly one of the two dash origins
+  (urllib-parsed; protocol-relative, userinfo, port and scheme variants
+  rejected); otherwise 302 to the Outreach Runner tree view. Residual
+  friction: the login page still needs one click on the OAuth button —
+  stock auth_oauth has no deep-link URL to the provider (auth_link is
+  built per-request in `OAuthLogin.list_providers`). Supported no-core-
+  patch fix if wanted: an addon route inheriting `OAuthLogin` that 302s
+  to the sole enabled provider's `auth_link` (documented in README, not
+  built).
+- Tests: `tests/test_queue_endpoint.py` (HttpCase, `post_install`) —
+  auth redirect, ordering (pin+seq beats score), shape, count_to_reach,
+  limit, CORS echo allowlist, preflight, and the connect hop (anonymous
+  bounce keeps the query, valid next 302s, invalid next stays local).
+  Not yet executed on the shared
+  dev VM: the live `odoo` PG role on VM 100 has no CREATEDB and no
+  scratch-DB path exists here, so they run in the earnkit/ansible flow
+  (command in README).
+
 ### Work items (in order)
 
 1. **Queue endpoint** — new `controllers/dashboard.py`:
