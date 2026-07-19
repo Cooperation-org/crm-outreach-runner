@@ -40,7 +40,7 @@ demo data.
 **Org scoping.** The dash is per-team: `workers.vc/dash/<org-slug>/`.
 The org slug is the shared tenant key across GovKit (`Org.slug`), amebo
 (`organizations.slug` / instance orgs), Taiga (project slug), and Odoo
-(DB `crm-<slug>`, host `crm-<slug>.workers.vc`) — provisioned together by
+(DB `crm-<slug>_vc`, host `crm-<slug>.workers.vc`) — provisioned together by
 `earnkit/playbooks/add-team.yml`. Components take the org via a
 `data-org` attribute where the owning app needs it (GovKit), or resolve
 it server-side from the authenticated identity (amebo — org is never a
@@ -95,7 +95,7 @@ is a browser-consumable read endpoint and the component.
 - No controllers/HTTP routes at all in this addon; card-scanner's only
   route is a redirect. All access today is Odoo web-client RPC,
   `auth='user'`.
-- Per-team Odoo: one DB per team, `dbfilter=^%d$` keyed on host
+- Per-team Odoo: one DB per team (`crm-<slug>_vc`, `dbfilter=^%d_vc$`) keyed on host
   `crm-<slug>.workers.vc`; OIDC provider row per DB (add-team.yml).
   Odoo session cookie is host-scoped and SameSite=Lax → rides on
   credentialed same-site fetches from workers.vc.
