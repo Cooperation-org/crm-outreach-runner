@@ -59,10 +59,22 @@ class OutreachDashboard(http.Controller):
     @http.route("/outreach/api/queue", type="http", auth="user",
                 methods=["GET"])
     def queue(self, limit=None, **kwargs):
-        """Top-of-queue leads for the reach-out card, ordered exactly like
-        the Outreach Runner tree view, plus count_to_reach (opportunities
-        never yet contacted). Access control is the session user's own:
-        crm.lead ACLs and record rules apply unchanged."""
+        """Top-of-queue leads for the reach-out card, plus count_to_reach
+        (opportunities never yet contacted).
+
+        Two tiers within the limit:
+          1. the session user's own leads (user_id = uid), ordered like
+             the Outreach Runner tree view (pinned desc, seq, score desc);
+          2. fill from the rest of the team — unassigned leads first,
+             then leads assigned to others — each group in the same tree
+             order, so a pinned team lead still outranks unpinned ones
+             within its group.
+
+        count_to_reach spans the same universe as the queue (own +
+        unassigned + assigned-to-others = every opportunity the caller
+        may read). crm.lead ACLs and record rules apply unchanged — see
+        README for the required group.
+        """
         try:
             limit = int(limit)
         except (TypeError, ValueError):
@@ -70,7 +82,23 @@ class OutreachDashboard(http.Controller):
         limit = max(1, min(limit, MAX_LIMIT))
 
         Lead = request.env["crm.lead"]
-        leads = Lead.search(QUEUE_DOMAIN, order=QUEUE_ORDER, limit=limit)
+        uid = request.env.uid
+        # Tier 1: own leads.
+        leads = Lead.search(QUEUE_DOMAIN + [("user_id", "=", uid)],
+                            order=QUEUE_ORDER, limit=limit)
+        # Tier 2 fill: unassigned first, then assigned to teammates.
+        remaining = limit - len(leads)
+        if remaining > 0:
+            leads += Lead.search(
+                QUEUE_DOMAIN + [("user_id", "=", False)],
+                order=QUEUE_ORDER, limit=remaining)
+            remaining = limit - len(leads)
+        if remaining > 0:
+            leads += Lead.search(
+                QUEUE_DOMAIN + [("user_id", "!=", False),
+                                ("user_id", "!=", uid)],
+                order=QUEUE_ORDER, limit=remaining)
+
         count_to_reach = Lead.search_count(
             QUEUE_DOMAIN + [("last_outreach_date", "=", False)])
 

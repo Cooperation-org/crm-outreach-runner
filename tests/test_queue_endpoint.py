@@ -28,34 +28,43 @@ class TestOutreachQueueEndpoint(HttpCase):
             {"active": False})
 
         cls.password = "Outreach-Test-2026!"
-        # Minimum documented ACL: sales_team.group_sale_salesman is what
-        # grants read on crm.lead (see README). The record rule then shows
-        # own + unassigned leads, which is why fixtures set user_id=False.
+        # Required ACL for the two-tier queue (see README): the fill tier
+        # reads unassigned AND teammates' leads, so the caller needs
+        # sales_team.group_sale_salesman_all_leads (implies salesman,
+        # which carries the crm.lead read ACL, and base.group_user).
         cls.user = cls.env["res.users"].create({
             "name": "Cohort Tester",
             "login": "cohort_tester",
             "password": cls.password,
             "groups_id": [(6, 0, [
-                cls.env.ref("sales_team.group_sale_salesman").id,
+                cls.env.ref("sales_team.group_sale_salesman_all_leads").id,
             ])],
         })
+        cls.other_user = cls.env.ref("base.user_admin")
 
         Lead = cls.env["crm.lead"]
         common = {"type": "opportunity", "user_id": False}
         # Rubric (models/crm_lead.py): priority*15, +25 known (no Cold
         # tag), no activities, no email -> scores are fully determined by
         # priority here: '0'->25, '1'->40, '3'->70.
-        cls.pinned_first = Lead.create(dict(
-            common, name="Pinned first", priority="0",
-            outreach_pinned=True, outreach_seq=1))     # score 25, pinned
-        cls.pinned_second = Lead.create(dict(
-            common, name="Pinned second", priority="3",
-            outreach_pinned=True, outreach_seq=2))     # score 70, pinned
-        cls.high = Lead.create(dict(
-            common, name="High rubric", priority="3"))  # score 70
-        cls.low = Lead.create(dict(
-            common, name="Low rubric", priority="1",
+        #
+        # Tier 1 — own leads (user_id = session user):
+        cls.own_pinned = Lead.create(dict(
+            common, name="Own pinned", user_id=cls.user.id, priority="0",
+            outreach_pinned=True, outreach_seq=1))      # score 25, pinned
+        cls.own_plain = Lead.create(dict(
+            common, name="Own plain", user_id=cls.user.id, priority="1",
             last_outreach_date="2026-07-01 12:00:00"))  # score 40, contacted
+        # Tier 2 fill, group A — unassigned:
+        cls.un_pinned = Lead.create(dict(
+            common, name="Unassigned pinned", priority="0",
+            outreach_pinned=True, outreach_seq=1))      # score 25, pinned
+        cls.un_high = Lead.create(dict(
+            common, name="Unassigned high", priority="3"))  # score 70
+        # Tier 2 fill, group B — assigned to a teammate:
+        cls.other_high = Lead.create(dict(
+            common, name="Other high", user_id=cls.other_user.id,
+            priority="3"))                               # score 70
         # Must never appear: not an opportunity.
         Lead.create(dict(common, name="Plain lead", type="lead",
                          priority="2"))
@@ -72,49 +81,58 @@ class TestOutreachQueueEndpoint(HttpCase):
         self.assertIn("/web/login", res.headers.get("Location", ""))
 
     def test_ordering_and_shape(self):
-        """Order identical to the tree view: pinned desc, seq, score desc.
-        Manual pin+seq beats a higher rubric score; type='lead' excluded."""
+        """Two tiers: own leads first (tree order — an own lead beats even
+        a pinned team lead), then the fill: unassigned before
+        assigned-to-others (even at equal score), pin/seq still respected
+        within each fill group; type='lead' excluded."""
         self.authenticate("cohort_tester", self.password)
         _res, data = self._queue()
         names = [lead["name"] for lead in data["leads"]]
         self.assertEqual(
             names,
-            ["Pinned first", "Pinned second", "High rubric", "Low rubric"])
+            ["Own pinned", "Own plain", "Unassigned pinned",
+             "Unassigned high", "Other high"])
 
         first = data["leads"][0]
         for key in ("id", "name", "partner_name", "email", "linkedin",
                     "last_outreach_date", "outreach_score",
                     "outreach_score_reason", "url"):
             self.assertIn(key, first)
-        self.assertEqual(first["id"], self.pinned_first.id)
+        self.assertEqual(first["id"], self.own_pinned.id)
         self.assertIsNone(first["last_outreach_date"])
         # url built from the request host, Odoo 17 form deep link.
         self.assertTrue(first["url"].endswith(
-            "/web#id=%d&model=crm.lead&view_type=form" % self.pinned_first.id))
+            "/web#id=%d&model=crm.lead&view_type=form" % self.own_pinned.id))
         self.assertTrue(first["url"].startswith(self.base_url()))
 
-        low = data["leads"][3]
-        self.assertEqual(low["last_outreach_date"], "2026-07-01T12:00:00Z")
-        self.assertEqual(low["outreach_score"], 40)
+        own_plain = data["leads"][1]
+        self.assertEqual(own_plain["last_outreach_date"],
+                         "2026-07-01T12:00:00Z")
+        self.assertEqual(own_plain["outreach_score"], 40)
 
     def test_count_to_reach(self):
-        """count_to_reach = opportunities never contacted, regardless of
-        the row limit."""
+        """count_to_reach = never-contacted opportunities across the whole
+        queue universe (own + unassigned + assigned-to-others),
+        regardless of the row limit."""
         self.authenticate("cohort_tester", self.password)
         _res, data = self._queue()
-        self.assertEqual(data["count_to_reach"], 3)
+        self.assertEqual(data["count_to_reach"], 4)  # all but Own plain
         _res, data = self._queue("?limit=1")
-        self.assertEqual(data["count_to_reach"], 3)
+        self.assertEqual(data["count_to_reach"], 4)
 
     def test_limit_param(self):
+        """The limit truncates across the tiers in order: own leads fill
+        first, then unassigned, then assigned-to-others."""
         self.authenticate("cohort_tester", self.password)
         _res, data = self._queue("?limit=2")
-        self.assertEqual(len(data["leads"]), 2)
         self.assertEqual([lead["name"] for lead in data["leads"]],
-                         ["Pinned first", "Pinned second"])
-        # Garbage limit falls back to the default (5 > fixture count of 4).
+                         ["Own pinned", "Own plain"])
+        _res, data = self._queue("?limit=3")
+        self.assertEqual([lead["name"] for lead in data["leads"]],
+                         ["Own pinned", "Own plain", "Unassigned pinned"])
+        # Garbage limit falls back to the default (5 = fixture count).
         _res, data = self._queue("?limit=nope")
-        self.assertEqual(len(data["leads"]), 4)
+        self.assertEqual(len(data["leads"]), 5)
 
     def test_cors_echo_allowed_origins_only(self):
         self.authenticate("cohort_tester", self.password)
