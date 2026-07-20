@@ -55,6 +55,13 @@
       'crm-reachout .why { flex: 1; font-size: 12px; opacity: 0.65; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }',
       'crm-reachout a.go { font-size: 12px; white-space: nowrap; opacity: 0.8; }',
       'crm-reachout a.go:hover { opacity: 1; }',
+      'crm-heard { display: block; font-family: system-ui, -apple-system, sans-serif; font-size: 14px; color: inherit; line-height: 1.45; }',
+      'crm-heard ul.heard-list { list-style: none; margin: 0; padding: 0; }',
+      'crm-heard li.heard-row { padding: 0.45rem 0; border-top: 1px solid rgba(127,127,127,0.15); }',
+      'crm-heard li.heard-row:first-child { border-top: none; }',
+      'crm-heard .said { display: block; }',
+      'crm-heard .meta { font-size: 12px; opacity: 0.65; }',
+      'crm-heard .meta a { color: inherit; }',
     ].join('\n');
     document.head.appendChild(s);
   }
@@ -164,4 +171,52 @@
   if (!customElements.get('crm-reachout')) {
     customElements.define('crm-reachout', CrmReachout);
   }
+
+  // <crm-heard> — the newest things humans actually said (lead chatter).
+  // Same contract: data-up (CRM origin), data-limit; empty/error -> hidden.
+  customElements.define('crm-heard', class extends HTMLElement {
+    connectedCallback() {
+      if (this.__mounted) return;
+      this.__mounted = true;
+      ensureStyles();
+      var up = (this.dataset.up || '').replace(/\/+$/, '');
+      if (!up) { this.hidden = true; return; }
+      var limit = parseInt(this.dataset.limit || '5', 10) || 5;
+      var self = this;
+      fetch(up + '/outreach/api/heard?limit=' + limit, { credentials: 'include' })
+        .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+        .then(function (d) {
+          var heard = (d && d.heard) || [];
+          if (!heard.length) { self.hidden = true; return; }
+          var ul = document.createElement('ul');
+          ul.className = 'heard-list';
+          heard.forEach(function (h) {
+            var li = document.createElement('li');
+            li.className = 'heard-row';
+            var said = document.createElement('span');
+            said.className = 'said';
+            said.textContent = '\u201C' + h.said + '\u201D';
+            li.appendChild(said);
+            var meta = document.createElement('span');
+            meta.className = 'meta';
+            var href = h.url && /^https?:\/\//i.test(h.url) ? h.url : null;
+            if (href) {
+              meta.appendChild(document.createTextNode((h.who || '') + ' · '));
+              var a = document.createElement('a');
+              a.href = href; a.target = '_blank'; a.rel = 'noopener';
+              a.textContent = h.lead || 'the lead';
+              meta.appendChild(a);
+            } else {
+              meta.textContent = (h.who || '') + (h.lead ? ' · ' + h.lead : '');
+            }
+            li.appendChild(meta);
+            ul.appendChild(li);
+          });
+          self.appendChild(ul);
+          self.hidden = false;
+        })
+        .catch(function () { self.hidden = true; });
+    }
+  });
+
 })();

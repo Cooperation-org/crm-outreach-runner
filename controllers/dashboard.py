@@ -125,6 +125,56 @@ class OutreachDashboard(http.Controller):
         }
         return request.make_json_response(payload, headers=_cors_headers())
 
+    @http.route("/outreach/api/heard", type="http", auth="user",
+                methods=["GET"])
+    def heard(self, limit=None, **kwargs):
+        """Recent chatter on leads — what the team actually heard from
+        humans. The dash's "What we heard" card: newest comments and
+        logged notes across all opportunities the caller can read.
+        mail.message ACLs apply unchanged."""
+        try:
+            limit = int(limit)
+        except (TypeError, ValueError):
+            limit = DEFAULT_LIMIT
+        limit = max(1, min(limit, MAX_LIMIT))
+
+        from odoo.tools import html2plaintext
+
+        messages = request.env["mail.message"].search(
+            [("model", "=", "crm.lead"),
+             ("message_type", "in", ("comment", "email")),
+             ("body", "!=", False)],
+            order="date desc", limit=limit)
+
+        host_url = request.httprequest.host_url
+        heard = []
+        for m in messages:
+            body = html2plaintext(m.body or "").strip()
+            if not body:
+                continue
+            lead = request.env["crm.lead"].browse(m.res_id).exists()
+            heard.append({
+                "id": m.id,
+                "who": m.author_id.name or "",
+                "lead": lead.name if lead else "",
+                "said": body[:280],
+                "date": _iso_utc(m.date),
+                "url": ("%sweb#id=%d&model=crm.lead&view_type=form"
+                        % (host_url, lead.id)) if lead else None,
+            })
+        return request.make_json_response(
+            {"heard": heard}, headers=_cors_headers())
+
+    @http.route("/outreach/api/heard", type="http", auth="none",
+                methods=["OPTIONS"])
+    def heard_preflight(self, **kwargs):
+        headers = _cors_headers() + [
+            ("Access-Control-Allow-Methods", "GET, OPTIONS"),
+            ("Access-Control-Allow-Headers", "Content-Type, Accept"),
+            ("Access-Control-Max-Age", "86400"),
+        ]
+        return request.make_response("", headers=headers, status=204)
+
     @http.route("/outreach/api/queue", type="http", auth="none",
                 methods=["OPTIONS"])
     def queue_preflight(self, **kwargs):
