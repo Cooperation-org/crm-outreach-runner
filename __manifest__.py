@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     "name": "CRM Outreach Runner",
-    "version": "17.0.1.1.0",
+    "version": "17.0.1.2.0",
     "summary": "Fast, prioritized outreach queue over your CRM campaigns — "
                "clickable email / LinkedIn / Discord, one-click \"contacted\".",
     "description": """
@@ -22,7 +22,9 @@ related/display fields plus one action button to ``crm.lead``.
     "website": "https://github.com/Cooperation-org/crm-outreach-runner",
     "license": "Other OSI approved licence",
     "category": "Sales/CRM",
-    "depends": ["crm", "contacts", "utm", "mail"],
+    # auth_oauth: /outreach/connect inherits OAuthLogin to reuse the
+    # stock auth_link/state building for the silent SSO hop.
+    "depends": ["crm", "contacts", "utm", "mail", "auth_oauth"],
     "data": [
         "views/outreach_runner_views.xml",
     ],

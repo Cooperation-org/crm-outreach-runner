@@ -8,7 +8,7 @@ Run (test DB, never the live one):
         --test-enable --test-tags /crm_outreach_runner -i crm_outreach_runner
 """
 import json
-from urllib.parse import quote
+from urllib.parse import parse_qs, quote, unquote_plus, urlparse
 
 from odoo.tests import HttpCase, tagged
 
@@ -176,10 +176,26 @@ class TestOutreachQueueEndpoint(HttpCase):
         self.assertEqual(res.status_code, 204)
         self.assertIsNone(res.headers.get("Access-Control-Allow-Origin"))
 
-    def test_connect_anonymous_bounces_through_login(self):
-        """Anonymous /outreach/connect goes to the login page with the
-        full path (incl. ?next=...) preserved in the redirect param, so
+    def _disable_all_providers(self):
+        self.env["auth.oauth.provider"].search([]).write({"enabled": False})
+
+    def _make_provider(self, name="LinkedTrust OIDC (test)",
+                       client_id="test-client-id"):
+        return self.env["auth.oauth.provider"].create({
+            "name": name,
+            "client_id": client_id,
+            "auth_endpoint": "https://idp.example/authorize",
+            "scope": "openid profile email",
+            "validation_endpoint": "https://idp.example/tokeninfo",
+            "body": "Log in with LinkedTrust",
+            "enabled": True,
+        })
+
+    def test_connect_anonymous_no_provider_falls_back_to_login(self):
+        """Anonymous, zero enabled providers: normal login page, with the
+        full path (incl. ?next=...) preserved in the redirect param so
         the hop resumes after sign-in."""
+        self._disable_all_providers()
         res = self.url_open(
             CONNECT_URL + "?next=https%3A%2F%2Fworkers.vc%2Fdash%2Fteam-x%2F",
             allow_redirects=False)
@@ -188,6 +204,54 @@ class TestOutreachQueueEndpoint(HttpCase):
         self.assertTrue(location.startswith("/web/login"))
         self.assertIn("outreach%2Fconnect", location)
         self.assertIn("next", location)
+
+    def test_connect_anonymous_single_provider_redirects_to_idp(self):
+        """Anonymous, exactly one enabled provider: silent 302 straight
+        into the provider's auth flow, state carrying the
+        /outreach/connect?next=... redirect for the round-trip."""
+        self._disable_all_providers()
+        provider = self._make_provider()
+        target = "https://workers.vc/dash/team-x/"
+        res = self.url_open(
+            CONNECT_URL + "?next=" + quote(target, safe=""),
+            allow_redirects=False)
+        self.assertEqual(res.status_code, 302)
+        location = res.headers.get("Location", "")
+        self.assertTrue(
+            location.startswith("https://idp.example/authorize?"),
+            "expected provider auth URL, got %r" % location)
+
+        qs = parse_qs(urlparse(location).query)
+        self.assertEqual(qs["client_id"], ["test-client-id"])
+        self.assertEqual(qs["response_type"], ["token"])
+        self.assertEqual(qs["scope"], ["openid profile email"])
+        # Return leg is the stock signin endpoint on THIS host.
+        self.assertTrue(qs["redirect_uri"][0].endswith("/auth_oauth/signin"))
+        self.assertTrue(qs["redirect_uri"][0].startswith("http"))
+
+        # The state redirect must round-trip to /outreach/connect with
+        # our next param intact (get_state builds it absolute and
+        # quote_plus'd from request.params['redirect']).
+        state = json.loads(qs["state"][0])
+        self.assertEqual(state["p"], provider.id)
+        post_auth = unquote_plus(state["r"])
+        self.assertIn("/outreach/connect?next=", post_auth)
+        self.assertIn("workers.vc", post_auth)
+        self.assertTrue(post_auth.startswith("http"))  # absolute, from request
+
+    def test_connect_anonymous_multiple_providers_fall_back_to_login(self):
+        """Anonymous, several enabled providers: the user must choose —
+        login page fallback, redirect preserved."""
+        self._disable_all_providers()
+        self._make_provider()
+        self._make_provider(name="Other IdP", client_id="other-client")
+        res = self.url_open(
+            CONNECT_URL + "?next=https%3A%2F%2Fworkers.vc%2Fdash%2F",
+            allow_redirects=False)
+        self.assertIn(res.status_code, (302, 303))
+        location = res.headers.get("Location", "")
+        self.assertTrue(location.startswith("/web/login"))
+        self.assertIn("outreach%2Fconnect", location)
 
     def test_connect_valid_next(self):
         self.authenticate("cohort_tester", self.password)

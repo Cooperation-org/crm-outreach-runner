@@ -16,6 +16,7 @@ from urllib.parse import urlparse
 
 from odoo import http
 from odoo.http import request
+from odoo.addons.auth_oauth.controllers.main import OAuthLogin
 
 # Exact origins allowed to read the queue cross-origin, with credentials.
 ALLOWED_ORIGINS = (
@@ -124,23 +125,54 @@ class OutreachDashboard(http.Controller):
         }
         return request.make_json_response(payload, headers=_cors_headers())
 
-    @http.route("/outreach/connect", type="http", auth="user",
-                methods=["GET"])
-    def connect(self, next=None, **kwargs):
-        """Session-warming hop for the dash's SSO-once chain.
+    @http.route("/outreach/api/queue", type="http", auth="none",
+                methods=["OPTIONS"])
+    def queue_preflight(self, **kwargs):
+        """CORS preflight. auth='none' because browsers send preflights
+        without credentials; the handler touches no data."""
+        headers = _cors_headers() + [
+            ("Access-Control-Allow-Methods", "GET, OPTIONS"),
+            ("Access-Control-Allow-Headers", "Content-Type, Accept"),
+            ("Access-Control-Max-Age", "86400"),
+        ]
+        return request.make_response("", headers=headers, status=204)
 
-        Anonymous hits are bounced by ``auth='user'`` through
-        ``/web/login?redirect=/outreach/connect?next=...`` (Odoo's
-        ``full_path`` keeps the query string, and stock auth_oauth's
-        ``get_state`` carries that same ``redirect`` through the OAuth
-        round-trip). Once a session exists, redirect to ``next`` — but
-        only to the exact dash origins, any path. No open redirect.
+
+class OutreachConnect(OAuthLogin):
+    """Session-warming hop for the dash's SSO-once chain.
+
+    Inherits auth_oauth's ``OAuthLogin`` (standard controller extension,
+    no core patching) so the anonymous branch can reuse the stock
+    ``list_providers``/``get_state`` auth-link building — same signing,
+    same state shape as the login page's own OAuth buttons.
+    """
+
+    @http.route("/outreach/connect", type="http", auth="public",
+                methods=["GET"])
+    def outreach_connect(self, next=None, **kwargs):
+        """GET /outreach/connect?next=<url>.
+
+        Signed in: 302 to ``next`` — but only to the exact dash origins,
+        any path (no open redirect); missing/invalid next lands on the
+        Outreach Runner view.
+
+        Anonymous: skip the login page when exactly one enabled OAuth
+        provider exists on this DB — 302 straight into its auth flow,
+        with the OAuth ``state`` carrying this same URL (path + query) as
+        the post-auth redirect, so the browser comes back here with a
+        session and the allowlisted external redirect then fires. Zero
+        or multiple providers: normal login page, redirect preserved.
         """
+        if request.session.uid:
+            return self._connect_signed_in(next)
+        return self._connect_anonymous()
+
+    def _connect_signed_in(self, next_url):
         target = None
-        if next:
+        if next_url:
             # urlparse strips ASCII tab/newline; redirect to the parsed
             # rebuild (geturl), never the raw parameter.
-            parsed = urlparse(next.strip())
+            parsed = urlparse(next_url.strip())
             # Exact scheme+host allowlist. Protocol-relative ("//host/…")
             # parses with an empty scheme, userinfo/port variants change
             # netloc — all rejected here. Host compare case-insensitive.
@@ -156,14 +188,22 @@ class OutreachDashboard(http.Controller):
         return request.redirect(
             "/web#action=%d" % action.id if action else "/web", code=302)
 
-    @http.route("/outreach/api/queue", type="http", auth="none",
-                methods=["OPTIONS"])
-    def queue_preflight(self, **kwargs):
-        """CORS preflight. auth='none' because browsers send preflights
-        without credentials; the handler touches no data."""
-        headers = _cors_headers() + [
-            ("Access-Control-Allow-Methods", "GET, OPTIONS"),
-            ("Access-Control-Allow-Headers", "Content-Type, Accept"),
-            ("Access-Control-Max-Age", "86400"),
-        ]
-        return request.make_response("", headers=headers, status=204)
+    def _connect_anonymous(self):
+        # This URL, path + query ('?next=...'), is what the browser must
+        # come back to after auth. full_path always carries a trailing
+        # '?' when there is no query — strip it.
+        full_path = request.httprequest.full_path.rstrip("?")
+        # get_state() (used by list_providers to sign each auth_link)
+        # reads the post-auth redirect from request.params['redirect'] —
+        # exactly how the login page builds its provider buttons. Set it
+        # rather than reimplementing state building here.
+        request.params["redirect"] = full_path
+        providers = self.list_providers()
+        if len(providers) == 1:
+            # Silent hop: straight into the sole provider's auth flow.
+            return request.redirect(
+                providers[0]["auth_link"], code=302, local=False)
+        # Zero or multiple providers: the user must see/choose — normal
+        # login page with the same redirect preserved.
+        return request.redirect_query(
+            "/web/login", {"redirect": full_path}, code=302)
