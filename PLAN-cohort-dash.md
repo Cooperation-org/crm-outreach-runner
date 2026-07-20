@@ -112,6 +112,12 @@ component contract). Implementation notes / deltas from the sketches:
 - Endpoint scope matches the Outreach Runner action: opportunities only
   (`type = 'opportunity'`); `count_to_reach` counts them regardless of
   `limit`. `limit` clamps to 1..100, invalid → 5.
+- **Ordering (user decision 2026-07-20): two tiers within the limit.**
+  Own leads first (`user_id = uid`, tree order: pinned desc, seq,
+  score desc), then a fill from the rest of the team — unassigned
+  before assigned-to-others, each group in the same tree order.
+  `count_to_reach` spans the same universe as the queue (own +
+  unassigned + others = all opportunities the caller may read).
 - OPTIONS preflight is a second route on the same path with
   `auth='none'` (browsers send preflights without credentials, so an
   `auth='user'` OPTIONS route can never succeed); it touches no data.
@@ -121,13 +127,16 @@ component contract). Implementation notes / deltas from the sketches:
   `lazy_property` per worker — a service restart (which the ansible
   module-upgrade deploy does anyway) is needed before a *newly added*
   static dir is served.
-- **ACL (item 3)**: reading `crm.lead` requires
-  `sales_team.group_sale_salesman` ("Sales / User: Own Documents Only",
-  ACL `crm.access_crm_lead`), which implies `base.group_user` — cohort
-  users provisioned via OIDC must be **internal** users with that group
-  (portal users have no crm.lead ACL). Its record rule shows own +
-  unassigned leads; for the whole team queue add
-  `sales_team.group_sale_salesman_all_leads` ("User: All Documents").
+- **ACL (item 3)**: required group is
+  `sales_team.group_sale_salesman_all_leads` ("Sales / User: All
+  Documents") — the fill tier reads teammates' and unassigned leads, so
+  the all-documents record rule is needed. It implies
+  `sales_team.group_sale_salesman` (the group carrying the crm.lead
+  read ACL, `crm.access_crm_lead`) and `base.group_user` — cohort users
+  provisioned via OIDC must be **internal** users with that group
+  (portal users have no crm.lead ACL). With only own-docs salesman the
+  endpoint still answers but the record rule silently hides teammates'
+  leads (fill degrades to unassigned only).
 - **Added (SSO-once scope, 2026-07-19): `GET /outreach/connect?next=<url>`**,
   `auth='user'` — the dash's session-warming hop. Anonymous hits bounce
   through `/web/login?redirect=/outreach/connect?next=…` (verified:
@@ -144,9 +153,12 @@ component contract). Implementation notes / deltas from the sketches:
   to the sole enabled provider's `auth_link` (documented in README, not
   built).
 - Tests: `tests/test_queue_endpoint.py` (HttpCase, `post_install`) —
-  auth redirect, ordering (pin+seq beats score), shape, count_to_reach,
-  limit, CORS echo allowlist, preflight, and the connect hop (anonymous
+  auth redirect, two-tier ordering (own first; unassigned before
+  assigned-to-others in the fill; pin+seq beats score within a group),
+  shape, count_to_reach over the full universe, limit truncation across
+  tiers, CORS echo allowlist, preflight, and the connect hop (anonymous
   bounce keeps the query, valid next 302s, invalid next stays local).
+  Test user carries the required `group_sale_salesman_all_leads`.
   Not yet executed on the shared
   dev VM: the live `odoo` PG role on VM 100 has no CREATEDB and no
   scratch-DB path exists here, so they run in the earnkit/ansible flow

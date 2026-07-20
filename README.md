@@ -42,11 +42,20 @@ JSON. Feeds the cohort dashboard's reach-out card (see
  "count_to_reach": 3}
 ```
 
-- Only opportunities (`type = 'opportunity'`), ordered exactly like the
-  Outreach Runner tree view: `outreach_pinned desc, outreach_seq asc,
-  outreach_score desc`.
-- `count_to_reach` = opportunities with no `last_outreach_date`
-  (independent of `limit`).
+- Only opportunities (`type = 'opportunity'`), in **two tiers within the
+  limit**:
+  1. the session user's **own** leads (`user_id` = the caller), ordered
+     like the Outreach Runner tree view: `outreach_pinned desc,
+     outreach_seq asc, outreach_score desc`;
+  2. if fewer than `limit`, a fill from the rest of the team —
+     **unassigned** leads first, then leads **assigned to others** —
+     each group in that same tree order (so a pinned team lead still
+     outranks unpinned ones within its group, and an unassigned lead
+     beats an assigned-to-someone-else lead even at equal score).
+- `count_to_reach` = opportunities with no `last_outreach_date`, counted
+  across the **whole queue universe** (own + unassigned +
+  assigned-to-others — everything the caller's record rules let them
+  read), independent of `limit`.
 - `limit` defaults to 5, max 100; invalid values fall back to the default.
 - `last_outreach_date` is ISO 8601 UTC (`…Z`) or `null`.
 - `url` is built from the request host — one addon serves every per-team
@@ -89,14 +98,18 @@ sole enabled provider's `auth_link`; no core patching. Not built yet.
 The endpoint reads `crm.lead` as the session user, so normal Odoo access
 control applies:
 
-- **Required group: `sales_team.group_sale_salesman`** ("Sales / User: Own
-  Documents Only") — the crm module's ACL granting read on `crm.lead`. It
-  implies `base.group_user`, so the caller must be an **internal** user;
+- **Required group: `sales_team.group_sale_salesman_all_leads`** ("Sales /
+  User: All Documents"). The fill tier shows teammates' and unassigned
+  leads, so the all-documents record rule is needed. It implies
+  `sales_team.group_sale_salesman` (which carries the crm.lead read ACL)
+  and `base.group_user`, so the caller must be an **internal** user;
   portal users have no `crm.lead` access. Cohort users provisioned via
   OIDC must be created as internal users with this group.
-- Record rule with that group: own leads + unassigned leads
-  (`user_id in (uid, False)`). To see the whole team's queue, add
-  `sales_team.group_sale_salesman_all_leads` ("User: All Documents").
+- With only `sales_team.group_sale_salesman` ("User: Own Documents
+  Only") the endpoint still responds, but its record rule
+  (`user_id in (uid, False)`) silently hides teammates' leads — the
+  fill tier degrades to unassigned leads only, and `count_to_reach`
+  shrinks the same way. Not the intended team queue.
 
 ## `<crm-reachout>` web component
 
