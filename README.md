@@ -69,29 +69,27 @@ JSON. Feeds the cohort dashboard's reach-out card (see
 ## Session-warming hop: `GET /outreach/connect?next=<url>`
 
 For the dash's SSO-once chain (sign in once on the dash, every card's
-app session gets warmed by chained redirects). `auth='user'`:
+app session gets warmed by chained redirects). `auth='public'`:
 
-- **Anonymous** hit → Odoo bounces through
-  `/web/login?redirect=/outreach/connect?next=…` (the query string is
-  preserved — `redirect` carries the full path). Stock `auth_oauth`
-  passes that same `redirect` through the OAuth round-trip (`get_state`),
-  so after "Log in with LinkedTrust" the browser lands back on
-  `/outreach/connect?next=…` with a fresh Odoo session.
+- **Anonymous, exactly one enabled OAuth provider on the DB** → silent
+  hop: 302 straight into that provider's auth flow, no login page. The
+  controller inherits `auth_oauth`'s `OAuthLogin` (standard controller
+  extension; the addon depends on `auth_oauth`) and reuses its stock
+  `list_providers`/`get_state` — the provider is discovered from the
+  DB, the return URL (`…/auth_oauth/signin`) is built from the request,
+  and the OAuth `state` carries `/outreach/connect?next=…` (path +
+  query) as the post-auth redirect. After auth the browser lands back
+  here with a fresh Odoo session and the external redirect below fires.
+- **Anonymous, zero or multiple enabled providers** → normal login page
+  (`/web/login?redirect=/outreach/connect?next=…`, redirect preserved);
+  `auth_oauth` passes that same `redirect` through the OAuth round-trip
+  when a provider button is clicked.
 - **Authenticated** → 302 to `next`, but only when `next` parses
   (urllib) to scheme+host exactly `https://workers.vc` or
   `https://www.workers.vc` — any path is fine; other origins,
   protocol-relative (`//…`), userinfo/port variants, and non-http
   schemes all fall through. Missing/invalid `next` → 302 to the
   Outreach Runner tree view (`/web#action=…`). No open redirect.
-
-**Residual friction:** the stock Odoo 17 login page still requires one
-click on the "Log in with LinkedTrust" OAuth button — `auth_oauth` has
-no stock URL that jumps straight to the provider (each provider's
-`auth_link` is built per-request in `OAuthLogin.list_providers`, with
-the `state` carrying the redirect). The clean, supported path to remove
-that click — if wanted later — is a small controller in this addon
-inheriting `OAuthLogin` that calls `list_providers()` and 302s to the
-sole enabled provider's `auth_link`; no core patching. Not built yet.
 
 ### Access requirements (who can call it)
 

@@ -137,27 +137,36 @@ component contract). Implementation notes / deltas from the sketches:
   (portal users have no crm.lead ACL). With only own-docs salesman the
   endpoint still answers but the record rule silently hides teammates'
   leads (fill degrades to unassigned only).
-- **Added (SSO-once scope, 2026-07-19): `GET /outreach/connect?next=<url>`**,
-  `auth='user'` — the dash's session-warming hop. Anonymous hits bounce
-  through `/web/login?redirect=/outreach/connect?next=…` (verified:
-  Odoo puts `httprequest.full_path` — path *including* query — into the
-  login `redirect` param, and stock auth_oauth's `get_state` carries
-  that `redirect` through the OAuth round-trip). Authenticated: 302 to
-  `next` only when scheme+host is exactly one of the two dash origins
-  (urllib-parsed; protocol-relative, userinfo, port and scheme variants
-  rejected); otherwise 302 to the Outreach Runner tree view. Residual
-  friction: the login page still needs one click on the OAuth button —
-  stock auth_oauth has no deep-link URL to the provider (auth_link is
-  built per-request in `OAuthLogin.list_providers`). Supported no-core-
-  patch fix if wanted: an addon route inheriting `OAuthLogin` that 302s
-  to the sole enabled provider's `auth_link` (documented in README, not
-  built).
+- **Added (SSO-once scope, 2026-07-19): `GET /outreach/connect?next=<url>`**
+  — the dash's session-warming hop. Authenticated: 302 to `next` only
+  when scheme+host is exactly one of the two dash origins (urllib-
+  parsed; protocol-relative, userinfo, port and scheme variants
+  rejected); otherwise 302 to the Outreach Runner tree view.
+- **Silent OAuth hop (approved follow-up, built 2026-07-20).** The
+  route is `auth='public'` on a controller inheriting auth_oauth's
+  `OAuthLogin` (addon now depends on `auth_oauth`; no core patches).
+  Anonymous + exactly one enabled `auth.oauth.provider` on the DB →
+  302 straight to that provider's `auth_link`; zero or multiple →
+  `/web/login?redirect=/outreach/connect?next=…` fallback. State
+  round-trip reuses stock code, not a reimplementation: the handler
+  sets `request.params['redirect'] = httprequest.full_path` (path
+  *including* the `?next=` query) and calls the inherited
+  `list_providers()`, whose `get_state` reads exactly that param —
+  the same mechanism the login page's provider buttons use — so
+  `/auth_oauth/signin` returns the browser to
+  `/outreach/connect?next=…` with a session, and the allowlisted
+  external redirect fires. Provider discovered from the DB, return URL
+  built from the request; nothing hardcoded.
 - Tests: `tests/test_queue_endpoint.py` (HttpCase, `post_install`) —
   auth redirect, two-tier ordering (own first; unassigned before
   assigned-to-others in the fill; pin+seq beats score within a group),
   shape, count_to_reach over the full universe, limit truncation across
   tiers, CORS echo allowlist, preflight, and the connect hop (anonymous
-  bounce keeps the query, valid next 302s, invalid next stays local).
+  + one enabled provider → 302 to the provider auth URL, asserting
+  client_id/redirect_uri and the state's redirect round-trip to
+  /outreach/connect?next=…; zero/multiple providers → login fallback
+  with redirect preserved; authenticated: valid next 302s,
+  invalid/trick next stays local).
   Test user carries the required `group_sale_salesman_all_leads`.
   Not yet executed on the shared
   dev VM: the live `odoo` PG role on VM 100 has no CREATEDB and no
