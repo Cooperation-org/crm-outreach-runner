@@ -10,6 +10,10 @@ class CrmLead(models.Model):
         related="partner_id.linkedin", string="LinkedIn", readonly=False)
     partner_discord = fields.Char(
         related="partner_id.discord", string="Discord", readonly=False)
+    partner_bluesky = fields.Char(
+        related="partner_id.bluesky", string="Bluesky", readonly=False)
+    partner_social_ids = fields.One2many(
+        related="partner_id.social_ids", string="Other Socials", readonly=False)
     partner_website = fields.Char(
         related="partner_id.website", string="Website", readonly=False)
     partner_category_ids = fields.Many2many(
@@ -36,9 +40,21 @@ class CrmLead(models.Model):
     outreach_score_reason = fields.Char(
         string="Why", compute="_compute_outreach_score", store=True)
 
+    # --- what "won" means here: they agreed to take part, in some role ---
+    committed_as = fields.Selection(
+        [("founder", "Founder"),
+         ("mentor", "Mentor"),
+         ("supporter", "Supporter"),
+         ("funder", "Funder")],
+        string="Committed As",
+        help="The role they agreed to take. Set this when the record reaches "
+             "the Committed stage; it keeps the board one column instead of "
+             "splitting the end of the funnel four ways.")
+
     @api.depends("priority", "activity_ids", "email_from",
                  "partner_id.category_id", "partner_id.email",
-                 "partner_id.linkedin", "partner_id.discord")
+                 "partner_id.linkedin", "partner_id.discord",
+                 "partner_id.bluesky", "partner_id.social_ids")
     def _compute_outreach_score(self):
         """Score 1 style (integral-mass two-score): computed in code from
         verifiable signals, with weights. No LLM here — an optional Haiku layer
@@ -65,7 +81,8 @@ class CrmLead(models.Model):
                 reasons.append("followup+20")
             # Reachable at a glance
             if lead.email_from or lead.partner_id.email or \
-               lead.partner_id.linkedin or lead.partner_id.discord:
+               lead.partner_id.linkedin or lead.partner_id.discord or \
+               lead.partner_id.bluesky or lead.partner_id.social_ids:
                 score += 10
                 reasons.append("reachable+10")
             lead.outreach_score = min(score, 100)

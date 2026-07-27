@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     "name": "CRM Outreach Runner",
-    "version": "17.0.1.3.0",
+    "version": "17.0.1.4.0",
     "summary": "Fast, prioritized outreach queue over your CRM campaigns — "
                "clickable email / LinkedIn / Discord, one-click \"contacted\".",
     "description": """
@@ -26,6 +26,7 @@ related/display fields plus one action button to ``crm.lead``.
     # stock auth_link/state building for the silent SSO hop.
     "depends": ["crm", "contacts", "utm", "mail", "auth_oauth"],
     "data": [
+        "security/ir.model.access.csv",
         "views/outreach_runner_views.xml",
         "views/social_links_views.xml",
     ],
