@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- The addon stores LinkedIn and Discord on the contact, but stock Odoo
+         shows neither. Without these inherits the fields are only visible in
+         the Outreach Runner list, so anyone working from the normal contact or
+         pipeline form sees no LinkedIn at all. Put them where the website
+         already is: same group, same url widget, one click out. -->
+
+    <record id="view_partner_form_social_links" model="ir.ui.view">
+        <field name="name">res.partner.form.social.links</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="base.view_partner_form"/>
+        <field name="arch" type="xml">
+            <field name="website" position="after">
+                <field name="linkedin" widget="url" placeholder="https://www.linkedin.com/in/..."/>
+                <field name="discord" widget="url" placeholder="https://discord.gg/..."/>
+            </field>
+        </field>
+    </record>
+
+    <record id="view_crm_lead_form_social_links" model="ir.ui.view">
+        <field name="name">crm.lead.form.social.links</field>
+        <field name="model">crm.lead</field>
+        <field name="inherit_id" ref="crm.crm_lead_view_form"/>
+        <field name="arch" type="xml">
+            <field name="email_from" position="after">
+                <field name="partner_linkedin" widget="url"
+                       placeholder="https://www.linkedin.com/in/..."/>
+                <field name="partner_discord" widget="url"
+                       placeholder="https://discord.gg/..."/>
+            </field>
+        </field>
+    </record>
+
+    <!-- Contacts list: LinkedIn as an optional column, off by default. -->
+    <record id="view_partner_tree_social_links" model="ir.ui.view">
+        <field name="name">res.partner.tree.social.links</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="base.view_partner_tree"/>
+        <field name="arch" type="xml">
+            <field name="email" position="after">
+                <field name="linkedin" widget="url" optional="hide"/>
+            </field>
+        </field>
+    </record>
+
+</odoo>

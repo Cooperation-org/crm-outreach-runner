@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     "name": "CRM Outreach Runner",
-    "version": "17.0.1.2.0",
+    "version": "17.0.1.3.0",
     "summary": "Fast, prioritized outreach queue over your CRM campaigns — "
                "clickable email / LinkedIn / Discord, one-click \"contacted\".",
     "description": """
@@ -27,6 +27,7 @@ related/display fields plus one action button to ``crm.lead``.
     "depends": ["crm", "contacts", "utm", "mail", "auth_oauth"],
     "data": [
         "views/outreach_runner_views.xml",
+        "views/social_links_views.xml",
     ],
     "installable": True,
     "application": False,
