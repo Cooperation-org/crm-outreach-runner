@@ -17,7 +17,7 @@
                 <field name="priority" widget="priority"/>
                 <field name="outreach_score" string="Rank" optional="show"/>
                 <field name="partner_id" string="Contact"/>
-                <field name="function" string="Role" optional="show"/>
+                <field name="partner_function" string="Role" optional="show"/>
                 <field name="campaign_id" optional="show"/>
                 <field name="partner_category_ids" widget="many2many_tags" string="Tags" optional="show"/>
                 <field name="email_from" widget="email" string="Email"/>
@@ -41,7 +41,7 @@
             <kanban class="o_kanban_mobile" default_order="outreach_pinned desc, outreach_seq asc, outreach_score desc" sample="1">
                 <field name="priority"/>
                 <field name="partner_id"/>
-                <field name="function"/>
+                <field name="partner_function"/>
                 <field name="campaign_id"/>
                 <field name="email_from"/>
                 <field name="partner_linkedin"/>
@@ -59,7 +59,7 @@
                                 <field name="priority" widget="priority"/>
                             </div>
                             <div class="text-muted small">
-                                <field name="function"/> · <field name="campaign_id"/>
+                                <field name="partner_function"/> · <field name="campaign_id"/>
                             </div>
                             <div class="mt-1">
                                 <field name="partner_category_ids" widget="many2many_tags"/>
@@ -114,6 +114,94 @@
         </field>
     </record>
 
+    <!-- Outreach card. The stock lead form is built for a sales pipeline:
+         expected revenue, probability, expected closing, recurring plan, lost
+         reason, medium/source. None of that is knowable when the job is "ask
+         this organisation for something", and it buried the two things that
+         are: how to reach them, and what we know about them. This is a
+         standalone form, not an inherit, so the pipeline fields cannot leak
+         back in one Odoo upgrade at a time. Nothing is deleted: the stock form
+         is untouched and still opens everywhere else in CRM.
+
+         Two note fields on purpose, one home per fact. "The ask" is ours —
+         what we want and why we think they would say yes. "About them" is the
+         contact's own Notes, facts about the organisation (what they have
+         funded, how much, how to apply) that stay true no matter who asks. -->
+    <record id="view_outreach_runner_form" model="ir.ui.view">
+        <field name="name">crm.lead.outreach.runner.form</field>
+        <field name="model">crm.lead</field>
+        <field name="arch" type="xml">
+            <form string="Outreach">
+                <header>
+                    <button name="action_mark_contacted" type="object"
+                            string="Log outreach" class="btn-primary"
+                            help="Stamp the time and add a chatter note"/>
+                    <field name="stage_id" widget="statusbar"
+                           options="{'clickable': '1'}"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <label for="name" string="The ask"/>
+                        <h1><field name="name" placeholder="Sponsor ask: ..."/></h1>
+                    </div>
+                    <group>
+                        <group string="Who to ask">
+                            <field name="partner_id" string="Contact"/>
+                            <field name="partner_function" string="Role"/>
+                            <field name="partner_category_ids"
+                                   widget="many2many_tags" string="Tags"/>
+                            <field name="campaign_id"/>
+                            <field name="user_id" string="Ours to run"/>
+                        </group>
+                        <group string="How to reach them">
+                            <field name="email_from" widget="email" string="Email"/>
+                            <field name="phone" widget="phone"/>
+                            <field name="partner_website" widget="url" string="Site"/>
+                            <field name="partner_linkedin" widget="url" string="LinkedIn"/>
+                            <field name="partner_bluesky" widget="url" string="Bluesky"/>
+                            <field name="partner_discord" widget="url" string="Discord"/>
+                        </group>
+                    </group>
+                    <group>
+                        <group string="Where it stands">
+                            <field name="priority" widget="priority"/>
+                            <field name="outreach_score" string="Rank"/>
+                            <field name="outreach_score_reason" string="Why that rank"/>
+                        </group>
+                        <group>
+                            <field name="outreach_pinned" string="Pinned"/>
+                            <field name="last_outreach_date" string="Last outreach"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page name="the_ask" string="The ask">
+                            <field name="description"
+                                   placeholder="What we want, and why they might say yes."/>
+                        </page>
+                        <page name="about_them" string="About them">
+                            <field name="partner_notes"
+                                   placeholder="What this organisation has funded, how much, and how to apply."/>
+                        </page>
+                        <page name="socials" string="Other socials">
+                            <field name="partner_social_ids">
+                                <tree editable="bottom">
+                                    <field name="sequence" widget="handle"/>
+                                    <field name="platform"/>
+                                    <field name="url" widget="url"/>
+                                </tree>
+                            </field>
+                        </page>
+                    </notebook>
+                </sheet>
+                <div class="oe_chatter">
+                    <field name="message_follower_ids"/>
+                    <field name="activity_ids"/>
+                    <field name="message_ids"/>
+                </div>
+            </form>
+        </field>
+    </record>
+
     <!-- Action -->
     <record id="action_outreach_runner" model="ir.actions.act_window">
         <field name="name">Outreach Runner</field>
@@ -139,6 +227,12 @@
         <field name="sequence" eval="2"/>
         <field name="view_mode">kanban</field>
         <field name="view_id" ref="view_outreach_runner_kanban"/>
+        <field name="act_window_id" ref="action_outreach_runner"/>
+    </record>
+    <record id="outreach_runner_act_form" model="ir.actions.act_window.view">
+        <field name="sequence" eval="3"/>
+        <field name="view_mode">form</field>
+        <field name="view_id" ref="view_outreach_runner_form"/>
         <field name="act_window_id" ref="action_outreach_runner"/>
     </record>
 

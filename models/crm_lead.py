@@ -16,6 +16,12 @@ class CrmLead(models.Model):
         related="partner_id.social_ids", string="Other Socials", readonly=False)
     partner_website = fields.Char(
         related="partner_id.website", string="Website", readonly=False)
+    # crm.lead has its OWN `function`, only filled when a lead is typed in by
+    # hand; leads made from an existing contact leave it empty, so the Role
+    # column read blank on every row. The role lives on the contact — read it
+    # from there.
+    partner_function = fields.Char(
+        related="partner_id.function", string="Role", readonly=False)
     partner_category_ids = fields.Many2many(
         related="partner_id.category_id", string="Contact Tags")
     partner_notes = fields.Html(
