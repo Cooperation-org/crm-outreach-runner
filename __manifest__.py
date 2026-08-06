@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     "name": "CRM Outreach Runner",
-    "version": "17.0.1.4.0",
+    "version": "17.0.1.5.0",
     "summary": "Fast, prioritized outreach queue over your CRM campaigns — "
                "clickable email / LinkedIn / Discord, one-click \"contacted\".",
     "description": """
@@ -30,6 +30,13 @@ related/display fields plus one action button to ``crm.lead``.
         "views/outreach_runner_views.xml",
         "views/social_links_views.xml",
     ],
+    "assets": {
+        # Backend only, so the bar never appears on the login page — and never
+        # for anyone who is not signed in.
+        "web.assets_backend": [
+            "crm_outreach_runner/static/src/embed/cohort-nav-mount.js",
+        ],
+    },
     "installable": True,
     "application": False,
 }
