@@ -132,6 +132,15 @@
         <field name="model">crm.lead</field>
         <field name="arch" type="xml">
             <form string="Outreach">
+                <!-- Carried, not shown. A form is editable, so Odoo validates
+                     the domain of every relational field in it: stage_id's own
+                     domain reads team_id, and partner_id / user_id / team_id
+                     are check_company, so their domain reads company_id. A
+                     field named in a domain must be in the view or the view
+                     does not load. The stock lead form carries the same two the
+                     same way. -->
+                <field name="company_id" invisible="1"/>
+                <field name="team_id" invisible="1"/>
                 <header>
                     <button name="action_mark_contacted" type="object"
                             string="Log outreach" class="btn-primary"
