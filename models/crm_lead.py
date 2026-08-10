@@ -94,6 +94,25 @@ class CrmLead(models.Model):
             lead.outreach_score = min(score, 100)
             lead.outreach_score_reason = " ".join(reasons)
 
+    @api.onchange("partner_id", "campaign_id")
+    def _onchange_outreach_name(self):
+        """Name a row typed straight into the outreach list.
+
+        crm.lead.name is required, and the outreach list does not carry it as
+        a column — picking a contact is the whole gesture. Without this, adding
+        a row inline fails on a field the user cannot see. The pattern is the
+        one already in the data: 1242 of 1299 existing leads are named
+        "<Org> — <Campaign>". Only fills a blank name, so nothing typed by
+        hand or already saved is ever overwritten.
+        """
+        for lead in self:
+            if lead.name or not lead.partner_id:
+                continue
+            parts = [lead.partner_id.display_name]
+            if lead.campaign_id:
+                parts.append(lead.campaign_id.name)
+            lead.name = " — ".join(parts)
+
     def action_mark_contacted(self):
         """One-click: stamp time, log a note, and pin it (you touched it)."""
         for lead in self:

@@ -6,11 +6,29 @@
         <field name="name">crm.lead.outreach.runner.tree</field>
         <field name="model">crm.lead</field>
         <field name="arch" type="xml">
+            <!-- Types like a spreadsheet, on purpose. People keep going back
+                 to Google Sheets because a CRM list makes you open a card to
+                 change one cell. editable="bottom" puts the cursor in the
+                 cell (Tab across, Enter to the next row); multi_edit lets you
+                 select rows and set one column for all of them at once; and
+                 open_form_view keeps the card, and its chatter, one click
+                 away on every row instead of taking it away. -->
             <tree string="Outreach Runner"
+                  editable="bottom"
+                  multi_edit="1"
+                  open_form_view="1"
                   default_order="outreach_pinned desc, outreach_seq asc, outreach_score desc"
                   decoration-muted="last_outreach_date != False"
                   decoration-bf="outreach_pinned == True"
                   sample="1">
+                <!-- Carried, not shown. Same reason as the form below: an
+                     editable list validates relational domains exactly like a
+                     form, and partner_id / user_id / team_id are
+                     check_company, so their domain reads company_id. A field
+                     named in a domain must be in the view or the view does
+                     not load. This is what broke the form in 16b71b2. -->
+                <field name="company_id" column_invisible="1"/>
+                <field name="team_id" column_invisible="1"/>
                 <field name="outreach_seq" widget="handle"/>
                 <field name="outreach_pinned" column_invisible="1"/>
                 <field name="outreach_score_reason" column_invisible="1"/>
@@ -218,7 +236,10 @@
         <field name="view_mode">tree,kanban,form</field>
         <field name="domain">[('type','=','opportunity')]</field>
         <field name="search_view_id" ref="view_outreach_runner_search"/>
-        <field name="context">{'search_default_not_contacted': 1, 'search_default_by_campaign': 1}</field>
+        <!-- default_type: the action's domain filters to opportunities, but a
+             row typed into the list still has to be created as one. Without
+             it, a new row saves as a lead and vanishes from the view. -->
+        <field name="context">{'search_default_not_contacted': 1, 'search_default_by_campaign': 1, 'default_type': 'opportunity'}</field>
         <field name="help" type="html">
             <p class="o_view_nocontent_smiling_face">Nothing to reach out to yet</p>
             <p>Opportunities on your campaigns show up here, prioritized for outreach.</p>

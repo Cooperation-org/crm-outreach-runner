@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     "name": "CRM Outreach Runner",
-    "version": "17.0.1.5.0",
+    "version": "17.0.1.6.0",
     "summary": "Fast, prioritized outreach queue over your CRM campaigns — "
                "clickable email / LinkedIn / Discord, one-click \"contacted\".",
     "description": """
