@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from odoo import api, fields, models
+from odoo import _, api, fields, models
 
 
 class CrmLead(models.Model):
@@ -30,6 +30,24 @@ class CrmLead(models.Model):
     last_outreach_date = fields.Datetime(
         string="Last Outreach", index=True,
         help="When outreach was last logged from the Outreach Runner.")
+
+    # Per-campaign columns. This field is NOT new — stock CRM ships it as
+    # crm.lead.lead_properties with definition='team_id.lead_properties_definition',
+    # so the column set belongs to the sales team. That is the wrong axis
+    # here: everyone is on one team and what varies is the campaign. Repointing
+    # the definition rather than adding a second field keeps the stock widget,
+    # search, group-by and _get_lead_properties working untouched, and leaves
+    # one home for the fact instead of two.
+    #
+    # Safe to repoint: lead_properties holds no values and no crm_team has a
+    # definition set, on linkedtrust_crm or on any of the eight team CRM
+    # databases (checked 2026-08-10). Nothing is keyed to the old axis.
+    lead_properties = fields.Properties(
+        string="Outreach Columns",
+        definition="campaign_id.lead_properties_definition",
+        copy=True,
+        help="Columns defined by this lead's campaign. Add or rename one from "
+             "any row and it applies to the whole campaign.")
 
     # --- ordering: manual layer (always wins) + rubric layer ---
     outreach_pinned = fields.Boolean(
@@ -94,21 +112,28 @@ class CrmLead(models.Model):
             lead.outreach_score = min(score, 100)
             lead.outreach_score_reason = " ".join(reasons)
 
-    @api.onchange("partner_id", "campaign_id")
-    def _onchange_outreach_name(self):
+    @api.depends("partner_id", "campaign_id")
+    def _compute_name(self):
         """Name a row typed straight into the outreach list.
 
-        crm.lead.name is required, and the outreach list does not carry it as
-        a column — picking a contact is the whole gesture. Without this, adding
-        a row inline fails on a field the user cannot see. The pattern is the
-        one already in the data: 1242 of 1299 existing leads are named
-        "<Org> — <Campaign>". Only fills a blank name, so nothing typed by
-        hand or already saved is ever overwritten.
+        crm.lead.name is required and is not a column here, because picking a
+        contact is the whole gesture. Stock already fills it, as
+        "<Partner>'s opportunity" — which is a sales-pipeline name, and does
+        not say which campaign the row belongs to when the same organisation
+        is on four of them. The data already settled this: 1242 of 1299
+        existing leads are named "<Org> — <Campaign>". Match it, so new rows
+        do not start a second naming style.
+
+        Only fills a blank name or replaces the stock placeholder verbatim.
+        Anything a person typed is left exactly as it is.
         """
         for lead in self:
-            if lead.name or not lead.partner_id:
+            if not lead.partner_id or not lead.partner_id.name:
                 continue
-            parts = [lead.partner_id.display_name]
+            placeholder = _("%s's opportunity") % lead.partner_id.name
+            if lead.name and lead.name != placeholder:
+                continue
+            parts = [lead.partner_id.name]
             if lead.campaign_id:
                 parts.append(lead.campaign_id.name)
             lead.name = " — ".join(parts)

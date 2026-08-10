@@ -44,6 +44,9 @@
                 <field name="partner_website" widget="url" string="Site" optional="hide"/>
                 <field name="phone" widget="phone" optional="hide"/>
                 <field name="last_outreach_date" string="Last outreach" optional="show"/>
+                <!-- This campaign's own columns. Each renders as a real,
+                     sortable, filterable column, not a blob in Notes. -->
+                <field name="lead_properties"/>
                 <button name="action_mark_contacted" type="object" string="Contacted"
                         icon="fa-check" class="btn-link"
                         help="Log outreach: stamp the time and add a chatter note"/>
@@ -118,6 +121,7 @@
                 <field name="partner_id" string="Contact"/>
                 <field name="campaign_id"/>
                 <field name="partner_category_ids" string="Tag"/>
+                <field name="lead_properties" string="Outreach Columns"/>
                 <filter name="not_contacted" string="Not yet contacted"
                         domain="[('last_outreach_date','=',False)]"/>
                 <filter name="high_priority" string="High priority"
@@ -127,6 +131,8 @@
                 <group expand="1" string="Group By">
                     <filter name="by_campaign" string="Campaign" context="{'group_by':'campaign_id'}"/>
                     <filter name="by_priority" string="Priority" context="{'group_by':'priority'}"/>
+                    <filter name="by_properties" string="Outreach Columns"
+                            context="{'group_by':'lead_properties'}"/>
                 </group>
             </search>
         </field>
@@ -200,6 +206,10 @@
                             <field name="last_outreach_date" string="Last outreach"/>
                         </group>
                     </group>
+                    <!-- Where a campaign's columns get added and renamed. The
+                         definition is shared by every row on the campaign, so
+                         adding one here adds the column to the whole list. -->
+                    <field name="lead_properties" columns="2"/>
                     <notebook>
                         <page name="the_ask" string="The ask">
                             <field name="description"

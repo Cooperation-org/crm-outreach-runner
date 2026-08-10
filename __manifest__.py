@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     "name": "CRM Outreach Runner",
-    "version": "17.0.1.6.0",
+    "version": "17.0.2.0.0",
     "summary": "Fast, prioritized outreach queue over your CRM campaigns — "
                "clickable email / LinkedIn / Discord, one-click \"contacted\".",
     "description": """
@@ -29,6 +29,9 @@ related/display fields plus one action button to ``crm.lead``.
         "security/ir.model.access.csv",
         "views/outreach_runner_views.xml",
         "views/social_links_views.xml",
+        # Last: it reparents the outreach menu to the top and switches every
+        # other root off, so both views above must already exist.
+        "views/two_sections_menus.xml",
     ],
     "assets": {
         # Backend only, so the bar never appears on the login page — and never
