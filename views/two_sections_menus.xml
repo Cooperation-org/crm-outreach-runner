@@ -2,17 +2,17 @@
 <odoo>
 
     <!-- ===================================================================
-         Two sections: Campaigns and Outreach. Nothing else.
+         Two front doors added: Outreach and Campaigns.
 
-         The CRM was not being used. Not because a feature was missing, but
-         because five addons and stock CRM each hung their own menu on it, so
-         doing one job meant choosing between eight doors, and people went back
-         to a spreadsheet instead. The two things worth keeping are the
-         outreach runner and the chatter, and both are reached from one list.
+         Outreach and Campaigns are put at the top level so the two jobs
+         people actually do are one click from the home screen, instead of
+         living inside the CRM app behind a door labelled something else.
 
-         Menus are deactivated, not deleted. Every action, view and record
-         behind them is untouched: a menu is one boolean away from coming back,
-         and anything reachable by URL or by a saved link still works.
+         These menus are ADDED. Nothing existing is hidden, moved or renamed.
+         An earlier version of this file deactivated every other top-level
+         menu; that took Contacts, CRM, Calendar and Discuss away from people
+         who were already using them, and broke crm.linkedtrust.us. Never
+         again: add a door, never take one away.
          =================================================================== -->
 
     <!-- 1. Outreach: the list you work. Was a child of the CRM app, which put
@@ -34,11 +34,5 @@
         <field name="web_icon">utm,static/description/icon.png</field>
         <field name="sequence" eval="2"/>
     </record>
-
-    <!-- 3. Everything else, off. Stated as the rule rather than as a list of
-         menus: a list goes stale the first time an addon adds a sixth one,
-         and it cannot name menus in addons we do not depend on. Runs on every
-         install and upgrade, so a deploy re-asserts it. -->
-    <function model="ir.ui.menu" name="_outreach_keep_two_sections"/>
 
 </odoo>
