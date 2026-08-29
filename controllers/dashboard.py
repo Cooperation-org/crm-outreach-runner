@@ -18,11 +18,34 @@ from odoo import http
 from odoo.http import request
 from odoo.addons.auth_oauth.controllers.main import OAuthLogin
 
-# Exact origins allowed to read the queue cross-origin, with credentials.
-ALLOWED_ORIGINS = (
+# Exact origins allowed to read the queue cross-origin, with credentials,
+# and to be redirected to by /outreach/connect.
+#
+# Configurable per database as the system parameter
+# ``outreach.allowed_origins`` (comma-separated absolute origins), the same
+# mechanism ``cohort_nav.src`` uses. Unset, the cohort dash values below
+# apply, so an existing database behaves exactly as before. This is what lets
+# a second dashboard — or a developer running one on localhost — read the
+# queue without an addon change.
+DEFAULT_ALLOWED_ORIGINS = (
     "https://workers.vc",
     "https://www.workers.vc",
 )
+
+
+def _allowed_origins():
+    """The configured origin allowlist, or the cohort defaults.
+
+    Never raises: a preflight runs with auth='none', and a misconfigured or
+    unreadable parameter must fall back to the defaults rather than 500.
+    """
+    try:
+        raw = request.env["ir.config_parameter"].sudo().get_param(
+            "outreach.allowed_origins", "")
+    except Exception:  # noqa: BLE001 - see docstring
+        return DEFAULT_ALLOWED_ORIGINS
+    origins = tuple(o.strip() for o in (raw or "").split(",") if o.strip())
+    return origins or DEFAULT_ALLOWED_ORIGINS
 
 # Identical to views/outreach_runner_views.xml tree default_order.
 QUEUE_ORDER = "outreach_pinned desc, outreach_seq asc, outreach_score desc"
@@ -36,11 +59,11 @@ MAX_LIMIT = 100
 
 def _cors_headers():
     """CORS headers for the current request: echo the Origin only when it
-    is exactly one of ALLOWED_ORIGINS. Always Vary on Origin so caches
+    is exactly one of the allowed origins. Always Vary on Origin so caches
     never serve one origin's headers to another."""
     headers = [("Vary", "Origin")]
     origin = request.httprequest.headers.get("Origin")
-    if origin in ALLOWED_ORIGINS:
+    if origin in _allowed_origins():
         headers += [
             ("Access-Control-Allow-Origin", origin),
             ("Access-Control-Allow-Credentials", "true"),
@@ -227,7 +250,7 @@ class OutreachConnect(OAuthLogin):
             # parses with an empty scheme, userinfo/port variants change
             # netloc — all rejected here. Host compare case-insensitive.
             origin = "%s://%s" % (parsed.scheme, parsed.netloc.lower())
-            if origin in ALLOWED_ORIGINS:
+            if origin in _allowed_origins():
                 target = parsed.geturl()
         if target:
             return request.redirect(target, code=302, local=False)
