@@ -26,6 +26,30 @@ install it:
 
 Then open **CRM → Outreach Runner**.
 
+## Its place in the workers.vc composition
+
+This addon is a **component provider**. It serves
+`static/src/embed/crm-reachout.js` from the team's own Odoo host, registering
+`<crm-reachout>` and `<crm-heard>` — the dashboard's reach-out card:
+
+```html
+<script src="https://crm-vc.workers.vc/crm_outreach_runner/static/src/embed/crm-reachout.js" defer></script>
+<crm-reachout data-up="https://crm-vc.workers.vc" data-limit="5"></crm-reachout>
+```
+
+**The org is the hostname**, so `<crm-reachout>` takes no org attribute: one addon
+serves every per-team Odoo database. The Odoo session cookie is the auth.
+
+**`govkit/docs/COMPOSITION.md`** is the master document for the composition — the
+diagram, the component catalog across every repo, the mount / auth / expand-link /
+config contracts, and how to run the set locally.
+
+Note for reuse and for local development: the allowed origins are a literal tuple,
+`ALLOWED_ORIGINS` in `controllers/dashboard.py`, and the same two origins gate the
+`?next=` of `/outreach/connect`. A second dashboard, or a shell on `localhost`, cannot
+read the queue until those are configurable — the addon already reads
+`cohort_nav.src` from `ir.config_parameter`, which is the mechanism to follow.
+
 ## Dashboard queue API
 
 `GET /outreach/api/queue?limit=5` — `auth='user'` (Odoo session cookie),
