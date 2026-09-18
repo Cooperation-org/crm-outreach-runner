@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from odoo import _, api, fields, models
-
+from .analytics import track_event
 
 class CrmLead(models.Model):
     _inherit = "crm.lead"
@@ -139,11 +139,21 @@ class CrmLead(models.Model):
             lead.name = " — ".join(parts)
 
     def action_mark_contacted(self):
-        """One-click: stamp time, log a note, and pin it (you touched it)."""
+        """One-click: stamp time, log a note, pin it, and track outreach."""
         for lead in self:
             lead.last_outreach_date = fields.Datetime.now()
             lead.outreach_pinned = True
             lead.message_post(body="Outreach sent (via Outreach Runner).")
+
+            track_event(
+                "outreach_started",
+                {
+                    "lead_id": lead.id,
+                    "campaign_id": lead.campaign_id.id if lead.campaign_id else None,
+                },
+                distinct_id=self.env.user.id,
+            )
+
         return True
 
     def write(self, vals):
