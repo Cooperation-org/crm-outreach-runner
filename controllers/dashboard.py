@@ -196,14 +196,15 @@ class OutreachDashboard(http.Controller):
         Outreach Runner's button (stamp the time, pin, log a note).
 
         csrf=False because the caller is the dash on another origin and
-        holds no Odoo CSRF token. In its place: the Origin must be on the
-        allowlist, and the custom header forces a CORS preflight, which
-        only allowlisted origins pass. crm.lead ACLs apply unchanged.
+        holds no Odoo CSRF token. In its place the Origin, which browsers
+        always send on a cross-origin POST, must be on the allowlist; and the
+        session cookie is SameSite=Lax, so no other site's POST carries it.
+        No custom header: that would need a CORS preflight, and the deployed
+        Odoo answers preflights on these paths with a login redirect.
+        crm.lead ACLs apply unchanged.
         """
         headers = _cors_headers()
-        origin = request.httprequest.headers.get("Origin")
-        if (origin not in _allowed_origins()
-                or request.httprequest.headers.get("X-Outreach-Embed") != "1"):
+        if request.httprequest.headers.get("Origin") not in _allowed_origins():
             return request.make_json_response(
                 {"error": "forbidden"}, headers=headers, status=403)
         lead = request.env["crm.lead"].browse(lead_id).exists()
@@ -215,16 +216,6 @@ class OutreachDashboard(http.Controller):
             "id": lead.id,
             "last_outreach_date": _iso_utc(lead.last_outreach_date),
         }, headers=headers)
-
-    @http.route("/outreach/api/lead/<int:lead_id>/contacted", type="http",
-                auth="none", methods=["OPTIONS"])
-    def lead_contacted_preflight(self, lead_id, **kwargs):
-        headers = _cors_headers() + [
-            ("Access-Control-Allow-Methods", "POST, OPTIONS"),
-            ("Access-Control-Allow-Headers", "X-Outreach-Embed"),
-            ("Access-Control-Max-Age", "86400"),
-        ]
-        return request.make_response("", headers=headers, status=204)
 
     @http.route("/outreach/api/heard", type="http", auth="none",
                 methods=["OPTIONS"])

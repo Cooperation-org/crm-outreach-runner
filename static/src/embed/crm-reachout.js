@@ -158,7 +158,6 @@
           var r = await fetch(base + '/outreach/api/lead/' + encodeURIComponent(lead.id) + '/contacted', {
             method: 'POST',
             credentials: 'include',
-            headers: { 'X-Outreach-Embed': '1' },
           });
           if (!r.ok) throw new Error(r.status);
           var d = await r.json();

@@ -95,9 +95,11 @@ JSON. Feeds the cohort dashboard's reach-out card (see
 The card's **contacted** button. Runs the same `action_mark_contacted` as the
 Outreach Runner button (stamps `last_outreach_date`, pins, logs a note) as the
 session user; `crm.lead` ACLs apply. `csrf=False` because the dash holds no Odoo
-CSRF token; instead the `Origin` must be on the allowlist and the request must
-carry `X-Outreach-Embed: 1`, which forces a CORS preflight only allowlisted
-origins pass. Anything else is 403. Returns `{"id", "last_outreach_date"}`.
+CSRF token; instead the `Origin` must be on the allowlist (anything else is 403),
+and the SameSite=Lax session cookie rides only on same-site requests. It is a
+simple CORS request with no custom header, because the deployed Odoo answers
+preflights on these paths with a login redirect. Returns
+`{"id", "last_outreach_date"}`.
 
 ## Session-warming hop: `GET /outreach/connect?next=<url>`
 
