@@ -90,6 +90,15 @@ JSON. Feeds the cohort dashboard's reach-out card (see
   preflight on the same route (`auth='none'` — preflights carry no
   credentials). All other origins get no CORS grant.
 
+## Contacted: `POST /outreach/api/lead/<id>/contacted`
+
+The card's **contacted** button. Runs the same `action_mark_contacted` as the
+Outreach Runner button (stamps `last_outreach_date`, pins, logs a note) as the
+session user; `crm.lead` ACLs apply. `csrf=False` because the dash holds no Odoo
+CSRF token; instead the `Origin` must be on the allowlist and the request must
+carry `X-Outreach-Embed: 1`, which forces a CORS preflight only allowlisted
+origins pass. Anything else is 403. Returns `{"id", "last_outreach_date"}`.
+
 ## Session-warming hop: `GET /outreach/connect?next=<url>`
 
 For the dash's SSO-once chain (sign in once on the dash, every card's

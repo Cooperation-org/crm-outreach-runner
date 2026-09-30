@@ -176,6 +176,27 @@ class TestOutreachQueueEndpoint(HttpCase):
         self.assertEqual(res.status_code, 204)
         self.assertIsNone(res.headers.get("Access-Control-Allow-Origin"))
 
+    def test_contacted_marks_the_lead(self):
+        """The card's Contacted button: allowlisted origin plus the embed
+        header stamps the lead; anything else is refused untouched."""
+        self.authenticate("cohort_tester", self.password)
+        url = "/outreach/api/lead/%d/contacted" % self.un_pinned.id
+        for headers in ({"Origin": "https://evil.example", "X-Outreach-Embed": "1"},
+                        {"Origin": "https://workers.vc"}):
+            res = self.url_open(url, data=b"", headers=headers)
+            self.assertEqual(res.status_code, 403)
+        self.un_pinned.invalidate_recordset()
+        self.assertFalse(self.un_pinned.last_outreach_date)
+
+        res = self.url_open(url, data=b"", headers={
+            "Origin": "https://workers.vc", "X-Outreach-Embed": "1"})
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(
+            res.headers.get("Access-Control-Allow-Origin"), "https://workers.vc")
+        self.un_pinned.invalidate_recordset()
+        self.assertTrue(self.un_pinned.last_outreach_date)
+        self.assertEqual(res.json()["id"], self.un_pinned.id)
+
     def _disable_all_providers(self):
         self.env["auth.oauth.provider"].search([]).write({"enabled": False})
 

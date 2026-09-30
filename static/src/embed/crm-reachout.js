@@ -53,8 +53,14 @@
       'crm-reachout li.reachout-row:first-child { border-top: none; }',
       'crm-reachout .who { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }',
       'crm-reachout .why { flex: 1; font-size: 12px; opacity: 0.65; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }',
-      'crm-reachout a.go { font-size: 12px; white-space: nowrap; opacity: 0.8; }',
-      'crm-reachout a.go:hover { opacity: 1; }',
+      'crm-reachout a.who { color: inherit; text-decoration: none; }',
+      'crm-reachout a.who:hover { text-decoration: underline; }',
+      'crm-reachout .acts { display: flex; gap: 10px; flex: none; }',
+      'crm-reachout .acts a, crm-reachout .acts button { font: inherit; font-size: 12px; white-space: nowrap; opacity: 0.8; }',
+      'crm-reachout .acts button { background: none; border: 0; padding: 0; color: var(--accent, inherit); cursor: pointer; }',
+      'crm-reachout .acts button:hover:not(:disabled) { text-decoration: underline; }',
+      'crm-reachout .acts a:hover, crm-reachout .acts button:hover { opacity: 1; }',
+      'crm-reachout .acts button:disabled { cursor: default; color: inherit; opacity: 0.6; }',
       'crm-heard { display: block; font-family: system-ui, -apple-system, sans-serif; font-size: 14px; color: inherit; line-height: 1.45; }',
       'crm-heard ul.heard-list { list-style: none; margin: 0; padding: 0; }',
       'crm-heard li.heard-row { padding: 0.45rem 0; border-top: 1px solid rgba(127,127,127,0.15); }',
@@ -98,6 +104,11 @@
 
   class CrmReachout extends HTMLElement {
     async connectedCallback() {
+      // Once per element. A dashboard grid moves cards in the page, which
+      // connects this element again; fetching and hiding each time made the
+      // grid lay itself out again, which moved the card again, without end.
+      if (this.__mounted) return;
+      this.__mounted = true;
       this.hidden = true;
       var base = upBase(this);
       if (!base) return;
@@ -119,6 +130,49 @@
       this._render(leads, data.count_to_reach);
     }
 
+    // Reach them where they are, then say so: email and LinkedIn when the CRM
+    // has them, and Contacted, which is the Outreach Runner's own button.
+    _actions(lead, why) {
+      var acts = document.createElement('span');
+      acts.className = 'acts';
+      if (lead.email) {
+        var mail = document.createElement('a');
+        mail.href = 'mailto:' + lead.email;
+        mail.textContent = 'email';
+        acts.appendChild(mail);
+      }
+      var li = lead.linkedin && safeHref(lead.linkedin);
+      if (li) {
+        var ln = document.createElement('a');
+        ln.href = li; ln.target = '_blank'; ln.rel = 'noopener';
+        ln.textContent = 'LinkedIn';
+        acts.appendChild(ln);
+      }
+      var base = upBase(this);
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.textContent = 'contacted';
+      btn.addEventListener('click', async function () {
+        btn.disabled = true;
+        try {
+          var r = await fetch(base + '/outreach/api/lead/' + encodeURIComponent(lead.id) + '/contacted', {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'X-Outreach-Embed': '1' },
+          });
+          if (!r.ok) throw new Error(r.status);
+          var d = await r.json();
+          why.textContent = noReplyText(d.last_outreach_date);
+          btn.textContent = 'contacted ✓';
+        } catch (e) {
+          btn.disabled = false;
+          btn.textContent = 'contacted (not saved, try again)';
+        }
+      });
+      acts.appendChild(btn);
+      return acts;
+    }
+
     _render(leads, count) {
       ensureStyles();
       while (this.firstChild) this.removeChild(this.firstChild);
@@ -129,12 +183,15 @@
         var li = document.createElement('li');
         li.className = 'reachout-row';
 
-        var who = document.createElement('span');
+        // The name opens the lead in the CRM.
+        var href = safeHref(lead.url);
+        var who = document.createElement(href ? 'a' : 'span');
         who.className = 'who';
         who.textContent = lead.partner_name || lead.name || '';
         if (lead.name && lead.name !== who.textContent) {
           who.title = lead.name;
         }
+        if (href) { who.href = href; who.target = '_blank'; who.rel = 'noopener'; }
 
         var why = document.createElement('span');
         why.className = 'why';
@@ -142,17 +199,7 @@
 
         li.appendChild(who);
         li.appendChild(why);
-
-        var href = safeHref(lead.url);
-        if (href) {
-          var a = document.createElement('a');
-          a.className = 'go';
-          a.textContent = 'open ↗';
-          a.href = href;
-          a.target = '_blank';
-          a.rel = 'noopener';
-          li.appendChild(a);
-        }
+        li.appendChild(this._actions(lead, why));
         ul.appendChild(li);
       }
       this.appendChild(ul);
