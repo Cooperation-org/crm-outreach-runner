@@ -49,6 +49,16 @@ class CrmLead(models.Model):
         help="Columns defined by this lead's campaign. Add or rename one from "
              "any row and it applies to the whole campaign.")
 
+    # --- the board (elm /board and /warm) ---
+    board_sequence = fields.Integer(
+        string="Board Order", default=1000, index=True,
+        help="Drag order within a board column. Separate from My Order, which "
+             "orders the outreach queue.")
+    board_user_ids = fields.Many2many(
+        "res.users", "crm_lead_board_user_rel", "lead_id", "user_id",
+        string="Also On It",
+        help="People working this lead besides the salesperson.")
+
     # --- ordering: manual layer (always wins) + rubric layer ---
     outreach_pinned = fields.Boolean(
         string="Pinned", default=False, index=True,
